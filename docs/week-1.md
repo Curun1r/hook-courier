@@ -1,39 +1,39 @@
-# Тиждень 1 — фундамент сервісу (18–20 годин)
+# Week 1 — Service foundation (18–20 hours)
 
-## 1. Репозиторій і локальний запуск — 3 години
+## 1. Repository and local startup — 3 hours
 
-- Ініціалізувати Git, додати `.gitignore`, `pyproject.toml`, `.env.example`, `Dockerfile` і `compose.yaml`.
-- Підняти Django API та PostgreSQL через Compose.
-- Перевірка: `docker compose config`, `docker compose up --build`, `python src/manage.py check`.
+- Initialize Git and add `.gitignore`, `pyproject.toml`, `.env.example`, `Dockerfile`, and `compose.yaml`.
+- Start the Django API and PostgreSQL with Compose.
+- Verify with `docker compose config`, `docker compose up --build`, and `python src/manage.py check`.
 
-## 2. Схема даних та Admin — 4 години
+## 2. Data model and Admin — 4 hours
 
-- Додати `Destination`, `Event`, `DeliveryAttempt` і початкову міграцію.
-- Керувати адресами отримувачів лише через Django Admin.
-- Перевірка: міграції застосовуються; у Admin можна створити й увімкнути адресу.
+- Add `Destination`, `Event`, and `DeliveryAttempt` with an initial migration.
+- Restrict destination management to Django Admin.
+- Verify that migrations apply and an active destination can be created in Admin.
 
-## 3. Контракт API й ключ — 3 години
+## 3. API contract and key — 3 hours
 
-- Захистити `POST /api/v1/events/` і `GET /api/v1/events/{id}/` заголовком `X-API-Key`.
-- Перевіряти тип події, JSON-об'єкт і активну адресу.
-- Перевірка: без правильного ключа доступу немає; некоректні дані дають `400`.
+- Protect `POST /api/v1/events/` and `GET /api/v1/events/{id}/` with `X-API-Key`.
+- Validate the event type, JSON object, and active destination.
+- Verify that requests without a valid key are denied and invalid input returns `400`.
 
-## 4. Приймання й ідемпотентність — 5 годин
+## 4. Event acceptance and idempotency — 5 hours
 
-- Зберігати подію у транзакції та повертати `202 Accepted` з незмінним UUID.
-- Нормалізувати дані для відбитка запиту; забезпечити унікальність ключа в базі.
-- Повтор із тим самим ключем і даними повертає ту саму подію; інші дані дають `409`.
-- Перевірка: автоматичні тести покривають повтор, конфлікт і помилку адреси.
+- Store events in a transaction and return `202 Accepted` with an immutable UUID.
+- Canonicalize request data for its fingerprint and enforce key uniqueness in the database.
+- Return the same event for a matching replay; return `409` when the same key carries different data.
+- Verify replay, conflict, and invalid destination behavior with automated tests.
 
-## 5. Тести й документація — 3–5 годин
+## 5. Tests and documentation — 3–5 hours
 
-- Перевірити API, міграції, конфігурацію та приклади запитів.
-- Задокументувати поточну поведінку `pending` і наступний крок із чергою.
-- Перевірка: тести й `manage.py check` проходять; інструкція запуску відтворювана.
+- Check the API, migrations, configuration, and example requests.
+- Document the current `pending` behavior and the next milestone for queueing.
+- Verify that tests and `manage.py check` pass and the startup steps work.
 
-## Межа етапу
+## Scope of this milestone
 
-На цьому тижні `DeliveryAttempt` є частиною схеми, але HTTP запити не надсилаються. Redis, Celery, повторні спроби й тестовий отримувач — наступний етап. Сторінка статусу, команда відновлення та CI — третій етап.
+`DeliveryAttempt` is part of the schema, but this milestone does not send HTTP requests. Redis, Celery, retries, and the demo receiver belong to week two. The status page, recovery command, and CI belong to week three.
 
-Готовність тижня: активна адреса створюється через Admin, API з ключем зберігає подію в PostgreSQL, повтори й конфлікти працюють, тести проходять.
+Week-one acceptance criteria: the owner can create an active destination in Admin; the keyed API stores an event in PostgreSQL; replays and conflicts behave as documented; tests pass.
 

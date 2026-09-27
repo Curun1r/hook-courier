@@ -1,31 +1,31 @@
 # HookCourier
 
-Невеликий сервіс приймання HTTP webhook подій. Перший етап створює подію в PostgreSQL, захищає API ключем та підтримує ідемпотентність. Доставка через Redis і Celery запланована на другий тиждень.
+HookCourier is a small HTTP webhook relay. The first milestone stores events in PostgreSQL, protects the API with a key, and supports idempotent requests. Delivery through Redis and Celery is planned for week two.
 
-## План роботи
+## Project plan
 
-Конкретні задачі й критерії перевірки першого тижня: [docs/week-1.md](docs/week-1.md).
+See [the week-one plan](docs/week-1.md) for concrete tasks and acceptance criteria.
 
-## Структура
+## Repository structure
 
 ```text
-src/config/                  Django settings та URL routing
-src/deliveries/              Моделі, Admin, API, бізнес-правила
-src/deliveries/migrations/   Міграції PostgreSQL
-tests/                       Перевірки API і правил приймання
-docs/                        План етапів
+src/config/                  Django settings and URL routing
+src/deliveries/              Models, Admin, API, and business rules
+src/deliveries/migrations/   PostgreSQL migrations
+tests/                       API and event acceptance tests
+docs/                        Milestone plans
 ```
 
-`demo/receiver.py`, Celery worker, сторінка статусу та CI з'являться на відповідних етапах плану.
+The demo receiver, Celery worker, status page, and CI workflow will be added in their planned milestones.
 
-## Локальний запуск
+## Run locally
 
-1. Скопіюйте `.env.example` у `.env` і замініть усі значення `change-this-...` на власні секрети.
-2. Запустіть `docker compose up --build -d`.
-3. Створіть власника: `docker compose exec web python src/manage.py createsuperuser`.
-4. Увійдіть у [Django Admin](http://localhost:8000/admin/) та створіть активну `Destination`.
+1. Copy `.env.example` to `.env` and replace every `change-this-...` value with your own secret. Keep `.env` out of Git.
+2. Run `docker compose up --build -d`.
+3. Create the owner account: `docker compose exec web python src/manage.py createsuperuser`.
+4. Sign in to [Django Admin](http://localhost:8000/admin/) and create an active `Destination`.
 
-Після створення адреси API приймає запит:
+After creating a destination, send an event:
 
 ```bash
 curl -i http://localhost:8000/api/v1/events/ \
@@ -35,15 +35,15 @@ curl -i http://localhost:8000/api/v1/events/ \
   -d '{"destination_id":1,"event_type":"appointment.created","payload":{"appointment_id":123}}'
 ```
 
-Очікувана відповідь першого тижня: `202 Accepted`, ID події та стан `pending`. Повтор із тим самим ключем і даними повертає ту саму подію; інші дані дають `409 Conflict`. Стан читається через `GET /api/v1/events/{id}/` з тим самим API ключем. Поки воркер не доданий, `pending` не змінюється автоматично.
+The API returns `202 Accepted`, an event ID, and the `pending` status. Repeating the request with the same idempotency key and data returns the same event. Reusing the key with different data returns `409 Conflict`. Read an event at `GET /api/v1/events/{id}/` with the same API key. Until the worker is added, events remain `pending`.
 
-## Тести
+## Run tests
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
-DB_ENGINE=sqlite .venv/bin/pytest
+DB_ENGINE=sqlite DJANGO_DEBUG=1 .venv/bin/pytest
 ```
 
-SQLite використовується лише для швидких локальних тестів; основний сервіс працює з PostgreSQL. Команда перевірки міграцій: `DB_ENGINE=sqlite .venv/bin/python src/manage.py makemigrations --check --dry-run`.
+SQLite is used for fast local tests; the application runs with PostgreSQL. Check for missing migrations with `DB_ENGINE=sqlite DJANGO_DEBUG=1 .venv/bin/python src/manage.py makemigrations --check --dry-run`.
 

@@ -59,6 +59,21 @@ services:
       web:
         condition: service_healthy
 
+  receiver:
+    build: .
+    image: hookcourier:local
+    command: python /app/demo/receiver.py
+    environment:
+      DEMO_FAILURES_BEFORE_SUCCESS: 2
+    networks:
+      default:
+        aliases:
+          - receiver.local
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   postgres_data:

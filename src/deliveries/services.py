@@ -1,10 +1,12 @@
 import hashlib
 import json
+from functools import partial
 
 from django.db import transaction
 from rest_framework.exceptions import APIException, ValidationError
 
 from .models import Destination, Event
+from .queueing import enqueue_event
 
 
 class IdempotencyConflict(APIException):
@@ -60,11 +62,13 @@ def accept_event(
             "request_hash": digest,
         }
         if idempotency_key is None:
-            return Event.objects.create(**values), False
+            event = Event.objects.create(**values)
+        else:
+            event, created = Event.objects.get_or_create(
+                idempotency_key=idempotency_key, defaults=values
+            )
+            if not created:
+                return _replay_or_conflict(event, digest)
 
-        event, created = Event.objects.get_or_create(
-            idempotency_key=idempotency_key, defaults=values
-        )
-        if not created:
-            return _replay_or_conflict(event, digest)
+        transaction.on_commit(partial(enqueue_event, str(event.pk)))
         return event, False

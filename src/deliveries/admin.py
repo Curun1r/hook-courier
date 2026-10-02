@@ -5,7 +5,8 @@ from .models import DeliveryAttempt, Destination, Event
 
 @admin.register(Destination)
 class DestinationAdmin(admin.ModelAdmin):
-    list_display = ("name", "url", "is_active", "created_at")
+    list_display = ("id", "name", "url", "is_active", "created_at")
+    readonly_fields = ("id",)
     list_filter = ("is_active",)
     search_fields = ("name", "url")
 
@@ -33,6 +34,7 @@ class EventAdmin(admin.ModelAdmin):
         "idempotency_key",
         "request_hash",
         "status",
+        "next_attempt_at",
         "created_at",
         "updated_at",
     )

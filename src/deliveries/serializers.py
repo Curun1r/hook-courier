@@ -1,6 +1,8 @@
+from django.conf import settings
 from rest_framework import serializers
 
 from .models import DeliveryAttempt, Event
+from .payloads import encode_webhook_body
 
 
 class EventInputSerializer(serializers.Serializer):
@@ -12,6 +14,20 @@ class EventInputSerializer(serializers.Serializer):
         if not isinstance(value, dict):
             raise serializers.ValidationError("Expected a JSON object.")
         return value
+
+    def validate(self, attrs):
+        body = encode_webhook_body(
+            event_id="00000000-0000-0000-0000-000000000000",
+            event_type=attrs["event_type"],
+            payload=attrs["payload"],
+        )
+        if len(body) > settings.WEBHOOK_MAX_BYTES:
+            raise serializers.ValidationError(
+                {
+                    "payload": f"Webhook body must not exceed {settings.WEBHOOK_MAX_BYTES} bytes."
+                }
+            )
+        return attrs
 
 
 class DeliveryAttemptSerializer(serializers.ModelSerializer):
@@ -32,6 +48,7 @@ class EventSerializer(serializers.ModelSerializer):
             "event_type",
             "payload",
             "status",
+            "next_attempt_at",
             "created_at",
             "updated_at",
             "attempts",

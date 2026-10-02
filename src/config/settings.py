@@ -98,3 +98,32 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
 }
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_PUBLISH_RETRY = False
+CELERY_BROKER_CONNECTION_TIMEOUT = 1
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "socket_connect_timeout": 1,
+    "socket_timeout": 1,
+}
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+
+def positive_setting(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be a positive integer") from exc
+    if value < 1:
+        raise ImproperlyConfigured(f"{name} must be a positive integer")
+    return value
+
+
+WEBHOOK_MAX_ATTEMPTS = positive_setting("WEBHOOK_MAX_ATTEMPTS", 5)
+WEBHOOK_TIMEOUT_SECONDS = positive_setting("WEBHOOK_TIMEOUT_SECONDS", 5)
+WEBHOOK_MAX_BYTES = positive_setting("WEBHOOK_MAX_BYTES", 65536)
+WEBHOOK_RETRY_BASE_SECONDS = positive_setting("WEBHOOK_RETRY_BASE_SECONDS", 2)
+WEBHOOK_RETRY_MAX_SECONDS = positive_setting("WEBHOOK_RETRY_MAX_SECONDS", 60)

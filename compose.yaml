@@ -1,3 +1,11 @@
+x-app: &app
+  build: .
+  image: hookcourier:local
+  env_file: .env
+  environment:
+    DB_HOST: db
+    CELERY_BROKER_URL: redis://redis:6379/0
+
 services:
   db:
     image: postgres:17-alpine
@@ -14,17 +22,59 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   web:
-    build: .
-    env_file: .env
-    environment:
-      DB_HOST: db
+    <<: *app
     command: sh -c "python src/manage.py migrate && python src/manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/admin/login/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - redis_data:/data
+
+  worker:
+    <<: *app
+    working_dir: /app/src
+    command: celery -A config worker --loglevel=INFO --concurrency=2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  receiver:
+    build: .
+    image: hookcourier:local
+    command: python /app/demo/receiver.py
+    environment:
+      DEMO_FAILURES_BEFORE_SUCCESS: 2
+    networks:
+      default:
+        aliases:
+          - receiver.local
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health/', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   postgres_data:
-
+  redis_data:

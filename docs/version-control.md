@@ -1,6 +1,6 @@
 # Git checkpoints
 
-Each implementation commit represents one logical step. Tests belong with the behavior they verify. Documentation is committed separately after the working demo has been checked.
+Each implementation commit represents one logical step. Tests and usage documentation belong with the behavior they verify.
 
 ## Available code versions
 
@@ -11,6 +11,9 @@ Each implementation commit represents one logical step. Tests belong with the be
 | `469c185` | HTTP delivery, attempt history, and bounded retries | 37 tests, Django checks, migration consistency |
 | `badaf05` | Queue new events after commit; preserve pending events on broker failure | 43 tests |
 | `0af4982` | Receiver that fails twice and succeeds on the third attempt | Live Compose demo: 503, 503, 200; duplicate jobs; replay and conflict checks |
+| `a24b459` | Weeks one and two merged into main | Original checkpoints retained by merge commit |
+| `7d8fa96` | Keep receiver URL secrets out of HTTP client logs | 46 test cases |
+| `223b5c2` | Recover due pending events after a broker outage | 55 test cases; real Redis outage and repeated recovery |
 
 At the delivery checkpoint, tasks can be queued manually. Automatic publication from the event API is introduced in the following commit. The demo receiver is introduced after that.
 
@@ -32,7 +35,7 @@ git switch --detach 469c185
 Return to the current implementation:
 
 ```bash
-git switch week-2-delivery
+git switch week-3-recovery-dashboard
 ```
 
 Detached HEAD is useful for inspection. If you want to make changes from that checkpoint, create a branch before committing:
@@ -62,7 +65,7 @@ Before running an earlier checkpoint, install its dependencies and rebuild its D
 Push the branch when you are ready:
 
 ```bash
-git push -u origin week-2-delivery
+git push -u origin week-3-recovery-dashboard
 ```
 
-Merge the week one pull request into `main` first, then open the week two pull request against `main`. Choose **Create a merge commit** to preserve these separate commits and their IDs in the main branch history.
+Weeks one and two were merged together through pull request #1. Open the current feature branch's pull request against `main`. Choose **Create a merge commit** to preserve the separate commits and their IDs in the main branch history.

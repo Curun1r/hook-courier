@@ -99,6 +99,17 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
 }
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"null": {"class": "logging.NullHandler"}},
+    "loggers": {
+        # HTTP client logs can contain destination credentials and query tokens.
+        "httpx": {"handlers": ["null"], "level": "WARNING", "propagate": False},
+        "httpcore": {"handlers": ["null"], "level": "WARNING", "propagate": False},
+    },
+}
+
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]

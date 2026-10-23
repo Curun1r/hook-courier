@@ -1,0 +1,60 @@
+{% extends "deliveries/base.html" %}
+{% block title %}Events{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Delivery activity</p>
+        <h1>Events</h1>
+        <p class="muted">Follow each event from acceptance to its final delivery attempt.</p>
+    </div>
+    <a class="button" href="?status={{ selected_status|urlencode }}&amp;page={{ page_obj.number }}">Refresh</a>
+</div>
+
+<section class="panel" aria-label="Event list">
+    <div class="panel-toolbar">
+        <form method="get" class="filter-form">
+            <label for="status">Status</label>
+            <select name="status" id="status">
+                <option value="">All statuses</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button class="button primary" type="submit">Apply</button>
+        </form>
+        <p class="muted">{{ paginator.count }} event{{ paginator.count|pluralize }}</p>
+    </div>
+
+    {% if events %}
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th scope="col">Event</th><th scope="col">Destination</th><th scope="col">Status</th><th scope="col">Attempts</th><th scope="col">Created (UTC)</th></tr></thead>
+            <tbody>
+                {% for event in events %}
+                <tr>
+                    <td><a class="event-link" href="{% url 'dashboard:event-detail' event.pk %}">{{ event.event_type }}</a><span class="event-id">{{ event.pk }}</span></td>
+                    <td>{{ event.destination.name }}</td>
+                    <td><span class="badge {{ event.status }}">{{ event.get_status_display }}</span></td>
+                    <td>{{ event.attempt_count }}</td>
+                    <td class="nowrap">{{ event.created_at|date:"Y-m-d H:i:s" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h2>No events found</h2>
+        <p class="muted">Send an event through the API or choose another status.</p>
+    </div>
+    {% endif %}
+
+    {% if is_paginated %}
+    <nav class="pagination" aria-label="Event pages">
+        {% if page_obj.has_previous %}<a class="button" href="?status={{ selected_status|urlencode }}&amp;page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="button" href="?status={{ selected_status|urlencode }}&amp;page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}

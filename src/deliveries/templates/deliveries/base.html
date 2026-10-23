@@ -1,0 +1,27 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Events{% endblock %} · HookCourier</title>
+    <link rel="stylesheet" href="{% static 'deliveries/dashboard.css' %}">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="{% url 'dashboard:event-list' %}">HookCourier<span>Delivery monitor</span></a>
+        <nav aria-label="Main navigation">
+            <span class="owner">{{ request.user.get_username }}</span>
+            <a href="{% url 'admin:index' %}">Django Admin</a>
+            <form action="{% url 'admin:logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="text-button">Sign out</button>
+            </form>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>Owner dashboard <span aria-hidden="true">·</span> All times in UTC</footer>
+</body>
+</html>

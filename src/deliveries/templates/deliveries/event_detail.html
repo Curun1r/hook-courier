@@ -1,0 +1,52 @@
+{% extends "deliveries/base.html" %}
+{% block title %}{{ event.event_type }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'dashboard:event-list' %}">← All events</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Event details</p>
+        <h1>{{ event.event_type }}</h1>
+        <p class="muted mono wrap">{{ event.pk }}</p>
+    </div>
+    <a class="button" href="{% url 'dashboard:event-detail' event.pk %}">Refresh</a>
+</div>
+
+<section class="panel" aria-label="Event information">
+    <dl class="event-summary">
+        <div><dt>Status</dt><dd><span class="badge {{ event.status }}">{{ event.get_status_display }}</span></dd></div>
+        <div><dt>Destination</dt><dd><a href="{% url 'admin:deliveries_destination_change' event.destination_id %}">{{ event.destination.name }}</a></dd></div>
+        <div><dt>Created (UTC)</dt><dd>{{ event.created_at|date:"Y-m-d H:i:s" }}</dd></div>
+        <div><dt>Updated (UTC)</dt><dd>{{ event.updated_at|date:"Y-m-d H:i:s" }}</dd></div>
+        {% if event.next_attempt_at %}<div><dt>Next attempt (UTC)</dt><dd>{{ event.next_attempt_at|date:"Y-m-d H:i:s" }}</dd></div>{% endif %}
+    </dl>
+</section>
+
+<section class="panel" aria-labelledby="attempts-heading">
+    <div class="section-heading"><h2 id="attempts-heading">Delivery attempts</h2><span class="muted">{{ event.attempts.all|length }} recorded</span></div>
+    {% if event.attempts.all %}
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th scope="col">Attempt</th><th scope="col">Started (UTC)</th><th scope="col">HTTP status</th><th scope="col">Duration</th><th scope="col">Error</th></tr></thead>
+            <tbody>
+                {% for attempt in event.attempts.all %}
+                <tr>
+                    <td class="mono">#{{ attempt.number }}</td>
+                    <td class="nowrap">{{ attempt.attempted_at|date:"Y-m-d H:i:s" }}</td>
+                    <td class="mono">{{ attempt.status_code|default_if_none:"—" }}</td>
+                    <td class="nowrap">{{ attempt.duration_ms }} ms</td>
+                    <td class="wrap">{{ attempt.error|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state"><h3>No delivery attempts yet</h3><p class="muted">The event is waiting for a worker or queue recovery. Refresh to check for updates.</p></div>
+    {% endif %}
+</section>
+
+<section class="panel" aria-labelledby="payload-heading">
+    <div class="section-heading"><h2 id="payload-heading">Payload</h2><span class="muted">JSON</span></div>
+    <pre class="payload"><code>{{ payload_json }}</code></pre>
+</section>
+{% endblock %}

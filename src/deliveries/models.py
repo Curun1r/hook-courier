@@ -36,6 +36,7 @@ class Event(models.Model):
         max_length=12, choices=Status.choices, default=Status.PENDING
     )
     next_attempt_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -43,7 +44,13 @@ class Event(models.Model):
         indexes = [
             models.Index(
                 fields=["status", "created_at"], name="event_status_created_idx"
-            )
+            ),
+            models.Index(
+                fields=["completed_at", "destination"],
+                include=["status"],
+                condition=models.Q(status__in=["delivered", "failed"]),
+                name="event_terminal_report_idx",
+            ),
         ]
 
     def __str__(self) -> str:

@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!.env.production.example
 .venv/
 .idea/
 __pycache__/
@@ -9,3 +12,5 @@ __pycache__/
 htmlcov/
 *.sqlite3
 *.egg-info/
+staticfiles/
+*.dump

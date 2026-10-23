@@ -41,11 +41,30 @@ Templates and CSS are included in the Python package as well as the Docker sourc
 - Celery worker logs are checked for the absence of a fake secret URL parameter at INFO.
 - Installed package metadata is checked for all three dashboard templates and the stylesheet.
 
-## Remaining first-version work
+## Release preparation
 
-1. GitHub Actions, including a PostgreSQL test job and concurrency checks.
-2. Delivery report by destination and day, with an execution plan and justified index.
-3. Deployment configuration, hosting selection, and final reproducibility checks.
-4. Final documentation and documented handling of interrupted delivering events.
+The following milestone adds:
+
+1. GitHub Actions on push and pull request, with PostgreSQL 17, Python 3.13,
+   formatting, lint, Django and migration checks, and the full test suite.
+2. Real PostgreSQL concurrency tests for equivalent/conflicting idempotency requests
+   and duplicate worker claims.
+3. A daily SQL report by destination and UTC completion day, explicit completion
+   timestamps, historical backfill, a partial covering index, and measured plans.
+4. A non-root Gunicorn image with WhiteNoise, build-time static assets, a separate
+   migration job, health checks, and a loopback-only production rehearsal.
+5. Final startup/demo/test instructions, backup/restore guidance, HTTPS preparation,
+   and documented handling of interrupted delivering events.
+
+The release suite contains 108 PostgreSQL test cases. The production rehearsal checks
+owner login, Admin/dashboard styles with DEBUG disabled, 503/503/200 delivery,
+idempotency, report counts, non-root processes, safe logs, and a PostgreSQL restore
+into a separate disposable database. The benchmark and rationale are in
+[reporting](reporting.md); runtime operations are in [deployment](deployment.md).
+
+GitHub Actions execution is verified only after pushing the branch and inspecting its
+run. Hosting, a public hostname, and TLS termination remain deferred at the owner's
+request; no paid or public deployment has been created. The current first version
+continues to require operator attention for an interrupted delivering event.
 
 Public registration, multiple organizations, extra delivery channels, and a complex frontend remain outside the first version.

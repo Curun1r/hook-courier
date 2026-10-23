@@ -1,56 +1,50 @@
 # HookCourier
 
-HookCourier accepts JSON events and delivers them to an owner-configured HTTP destination in a background worker. PostgreSQL stores events and attempt history; Redis carries Celery jobs.
+HookCourier accepts JSON events and delivers them to an owner-configured HTTP endpoint in a background worker. It records each delivery attempt, retries temporary failures, and lets the owner inspect the result.
+
+The main demo is deliberately simple: the receiver returns **503, 503, then 200**. The event reaches `delivered` with three recorded attempts.
 
 ```text
-Sender → Django API → PostgreSQL → Redis → Celery worker → HTTP receiver
-                          ↑                    │
-                          └── attempt history ─┘
+Sender → Django REST API → PostgreSQL → Redis → Celery worker → HTTP receiver
+                               ↑                    │
+                               └── attempt history ─┘
 ```
 
-## Milestones
+## What is included
 
-- [Week one: service foundation](docs/week-1.md)
-- [Week two: background delivery](docs/week-2.md)
-- [Week three: recovery and owner dashboard](docs/week-3.md) (in progress)
+- API-key protected event acceptance and status endpoints.
+- PostgreSQL storage for destinations, events, and individual attempts.
+- Idempotency keys: equivalent replays return the same event; conflicting data returns 409.
+- HTTP timeouts, bounded retries, safe logs, and a pending-event recovery command.
+- An owner dashboard with status filtering, pagination, payloads, and attempt history.
+- A PostgreSQL report by destination and UTC completion day, with measured query plans.
+- GitHub Actions for lint, formatting, configuration, migrations, and PostgreSQL tests.
+- Development Compose and a production rehearsal using Gunicorn, WhiteNoise, and a non-root image.
 
-See [Git checkpoints and returning to earlier code](docs/version-control.md) for the commit history and workflow.
+Scope: one trusted owner and HTTP delivery. Public registration, multiple organizations, file uploads, extra delivery channels, and a complex frontend are excluded. No public hosting is provisioned yet.
 
-## Repository structure
+## Quick start
 
-```text
-src/config/                  Django and Celery configuration
-src/deliveries/              Models, Admin, API, queueing, and delivery rules
-src/deliveries/migrations/   Database migrations
-src/deliveries/management/   Pending-event recovery command
-src/deliveries/templates/    Owner dashboard pages
-src/deliveries/static/       Dashboard stylesheet
-demo/receiver.py             Receiver that fails twice, then succeeds
-tests/                       API, transaction, delivery, and retry tests
-docs/                        Milestone plans
-```
+Requires Git and Docker Compose v2 with Docker running. Python 3.13+ is needed only for host-side tests or generating secrets.
 
-## Run locally
+1. Copy `.env.example` to `.env`. If you already configured `.env`, retain it.
+2. Replace **every** `change-this-...` value with a separate random value. Generate values with `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'`. Keep secrets out of Git.
+3. Start the development services:
 
-1. Copy `.env.example` to `.env` and replace every `change-this-...` value with your own secret. Keep `.env` out of Git. If a local `.env` already exists, retain its secrets; optional delivery settings have defaults.
-2. Start Docker Desktop, then run `docker compose up --build -d`.
-3. Check the services with `docker compose ps`. Compose runs the migrations before the worker starts.
-4. Create the owner account if needed: `docker compose exec web python src/manage.py createsuperuser`.
-5. Sign in to [Django Admin](http://localhost:8000/admin/).
-6. Open the [owner dashboard](http://localhost:8000/) with that account. Access requires an active superuser; an API key alone does not grant access to these pages.
+   ```bash
+   docker compose up --build -d --wait
+   docker compose ps
+   docker compose exec web python src/manage.py createsuperuser
+   ```
 
-The API listens on port 8000. PostgreSQL, Redis, and the receiver are available only on the Compose network. This setup uses Django's development server for local work.
+4. Open the [owner dashboard](http://localhost:8000/). Use the active superuser account; login reuses Django Admin.
+5. In [Admin](http://localhost:8000/admin/), create an active destination named `Retry demo receiver` with URL `http://receiver.local:9000/webhook/`. Note its numeric ID.
 
-## Demo: two failures, then success
+The development stack uses Django's development server. PostgreSQL, Redis, and the receiver have no published host ports. Existing accounts and events persist in Docker volumes.
 
-In Admin, create an active Destination with these values:
+## Repeat the demo
 
-- Name: `Retry demo receiver`
-- URL: `http://receiver.local:9000/webhook/`
-
-The destination ID appears in the Admin list and edit form. Use that number as `destination_id` below. The receiver tracks attempts separately for each immutable event ID and returns 503, 503, then 200. Its counters reset when its container restarts.
-
-From the repository directory, load the local key and send an event:
+From the repository directory, load the key and send an event. Replace `destination_id: 1` with the numeric ID you just created. Use a fresh idempotency key for each new demo run.
 
 ```bash
 source .env
@@ -61,88 +55,129 @@ curl -i http://localhost:8000/api/v1/events/ \
   -d '{"destination_id":1,"event_type":"appointment.created","payload":{"appointment_id":123}}'
 ```
 
-The API returns `202 Accepted`, the event ID, and a `Location` header. Replace `EVENT_UUID` with that ID to inspect delivery:
+Expect `202 Accepted`, a UUID in `id`, and a `Location` header. Replace `EVENT_UUID` with that ID:
 
 ```bash
 curl -s http://localhost:8000/api/v1/events/EVENT_UUID/ \
   -H "X-API-Key: $HOOKCOURIER_API_KEY" | python3 -m json.tool
 ```
 
-After about six seconds plus request time, the event should be `delivered` with three attempts whose HTTP codes are `503`, `503`, and `200`. The same history is visible in the owner dashboard and Admin → Events. Use the dashboard's Refresh button to see updates. Inspect the processes with `docker compose logs worker receiver`.
+After about six seconds plus request time, expect `status: delivered` and attempt codes `[503, 503, 200]`. Open the event in the dashboard and use **Refresh** to see updates.
 
-Repeating a request with the same idempotency key and event data returns the same event without scheduling another delivery. Reusing the key with different data returns `409 Conflict`. Use a new key for each new demo run. Omitting the key creates a new event for every request.
+Send the identical POST again: it returns the same UUID with `Idempotency-Replayed: true` and creates no new delivery. Change `appointment_id` while retaining the key: expect `409 Conflict`. Omitting the key creates a new event each time. Receiver counters reset when its container restarts.
 
-## Delivery behavior
+## API and data
+
+| Endpoint | Result | Authentication |
+|---|---|---|
+| `POST /api/v1/events/` | Validate and accept an event; return 202 | `X-API-Key` |
+| `GET /api/v1/events/{uuid}/` | Event state and all attempts | `X-API-Key` |
+| `/` and `/events/{uuid}/` | Owner dashboard | Active superuser session |
+| `GET /healthz/` | Database availability; 200 or 503 | None; no private details |
+
+`Destination` stores the endpoint name, URL, and active flag. `Event` stores the destination, type, JSON payload, idempotency fingerprint, state, next retry, and completion time. `DeliveryAttempt` stores its number, start time, HTTP code, duration, and safe error.
+
+A destination ID is an integer. An event ID is a UUID and stays unchanged across retries. The receiver gets `id`, `event_type`, and `payload`, plus an `X-HookCourier-Event-ID` header. The sender's API key is never forwarded.
+
+## Delivery rules
 
 | State | Meaning |
 |---|---|
-| `pending` | Waiting for the first attempt, a scheduled retry, or queue recovery |
-| `delivering` | A worker has claimed the event and is making the request |
-| `delivered` | The receiver returned an HTTP 2xx response |
-| `failed` | A permanent error occurred or the attempt limit was reached |
+| `pending` | Waiting for a first attempt, retry, or queue recovery |
+| `delivering` | Claimed by a worker for an HTTP request |
+| `delivered` | Receiver returned HTTP 2xx |
+| `failed` | Permanent error or exhausted attempt limit |
 
-- HTTP 2xx succeeds.
-- Network errors, timeouts, HTTP 429, and HTTP 5xx are retried.
-- Other HTTP 4xx and HTTP redirects fail immediately. Redirects are not followed.
-- The default limit is five attempts, including the first request. Delays are 2, 4, 8, and 16 seconds.
-- The outgoing JSON body is limited to 65,536 bytes. Oversized events are rejected by the API; the worker also checks saved events.
-- HTTPX uses a five-second timeout for each I/O phase. Response bodies are not read or stored.
-- A destination disabled before delivery produces a failed attempt without an HTTP request.
+- Retry network errors, timeouts, HTTP 429, and HTTP 5xx.
+- Other HTTP 4xx and redirects fail immediately; redirects are not followed.
+- Five attempts maximum by default, including the first. Retry delays: 2, 4, 8, 16 seconds.
+- Limit the outgoing JSON envelope to 65,536 bytes. API and worker both check it.
+- Use a five-second timeout for each HTTP I/O phase; response bodies are not stored.
+- A disabled destination produces a failed attempt without an HTTP request.
+- Publish the task with `transaction.on_commit()` after PostgreSQL saves the event.
+- Database uniqueness and row locks protect idempotency and concurrent worker claims.
 
-Each webhook contains `id`, `event_type`, and `payload`. The `X-HookCourier-Event-ID` header repeats the event ID. The sender's API key is never forwarded to the receiver.
+A receiver can process the same event more than once if its response is lost. HookCourier **does not promise exactly one delivery**. Receivers should deduplicate using the immutable event ID.
 
-Delivery can be repeated when a receiver processes a request but its response is lost. HookCourier does not promise exactly one delivery. Receivers should use the event ID to recognize duplicates.
+## Recover after a queue outage
 
-## Queue failure and current limitations
-
-Jobs are published with Django's `transaction.on_commit()`. A broker failure does not undo the saved event or turn the accepted request into an error: the event remains pending. Publishing failures are logged using only the event ID.
-
-Preview the due pending events, then queue them after Redis is available:
+If Redis is unavailable, the API still saves the event and returns 202. Preview due pending events and queue them after restoring Redis:
 
 ```bash
 docker compose exec web python src/manage.py requeue_pending --dry-run
 docker compose exec web python src/manage.py requeue_pending --limit 100
 ```
 
-The default limit is 100 events, ordered oldest first. Only `pending` events with no scheduled time or with a time that has already arrived are selected. Future retries and other states are skipped. Dry-run does not publish jobs. A publishing failure stops the command with a nonzero exit status; restore Redis and run it again. Existing attempt history and delivery states are retained. Duplicate jobs remain safe under the worker's database claim and status checks.
+The default batch is 100, oldest first. Future retries and delivering/terminal states are skipped. Dry-run publishes nothing. A publish failure stops with a nonzero exit status and retains saved data. Repeated recovery can enqueue duplicate jobs; the worker checks the saved state before delivery.
 
-This also applies to events accepted before the worker was added. An interrupted worker can leave an event in `delivering`; the recovery command skips that state, and automatic crash recovery is not implemented yet.
-
-Destinations are managed by the trusted owner in Admin. The API does not accept arbitrary receiver URLs. Opening destination management to untrusted users requires SSRF protection before deployment.
-
-## Owner dashboard
-
-- `/` lists events newest first, with destination, status, attempt count, and creation time.
-- Filter by status and browse 25 events per page.
-- `/events/EVENT_UUID/` shows the JSON payload, next retry time, and complete attempt history.
-- Anonymous visitors are redirected to the existing Admin login. Authenticated users without superuser status receive 403.
-- Payloads and error text are escaped, and owner pages are marked private and non-cacheable. All times are UTC.
-- Dashboard authentication uses the owner session; the JSON API continues to require `X-API-Key`.
-
-## Configuration
-
-Compose sets the broker URL to `redis://redis:6379/0`. Optional settings in `.env` override these defaults:
-
-| Setting | Default |
-|---|---|
-| `WEBHOOK_MAX_ATTEMPTS` | `5` |
-| `WEBHOOK_TIMEOUT_SECONDS` | `5` |
-| `WEBHOOK_MAX_BYTES` | `65536` |
-| `WEBHOOK_RETRY_BASE_SECONDS` | `2` |
-| `WEBHOOK_RETRY_MAX_SECONDS` | `60` |
-
-Changes require recreating the web and worker containers, for example with `docker compose up -d --force-recreate web worker`. API secrets, event payloads, response bodies, and destination credentials are excluded from delivery logs; HTTP errors store a status code or exception class. HTTPX and HTTPCore logs are suppressed because their request messages can include secret URL parameters. Application warnings remain available.
-
-## Run checks
+## Daily report
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
-DB_ENGINE=sqlite DJANGO_DEBUG=1 .venv/bin/python -m pytest
-DB_ENGINE=sqlite DJANGO_DEBUG=1 .venv/bin/python src/manage.py check
-DB_ENGINE=sqlite DJANGO_DEBUG=1 .venv/bin/python src/manage.py makemigrations --check --dry-run
-.venv/bin/ruff check src tests demo
-.venv/bin/ruff format --check src tests demo
+docker compose exec web python src/manage.py delivery_report \
+  --from-date 2026-10-01 --to-date 2026-10-24
 ```
 
-Local unit tests use SQLite, a mocked broker, and an HTTPX mock receiver. The Compose demo verifies the running Redis broker, Celery worker, and PostgreSQL database. CI and a PostgreSQL test job are planned for week three.
+CSV counts **terminal events**, grouped by destination ID and UTC completion day; both dates are inclusive. Add `--destination-id 2` to filter or `--explain` to execute `EXPLAIN (ANALYZE, BUFFERS)`.
+
+The dates above are examples. Select the UTC day on which your event completed to include it in the result.
+
+The report has a partial covering index for completion-time ranges. A documented 100,000-event local benchmark changed from a sequential scan to an index-only scan: median 20.246 ms to 0.385 ms for the selected one-day range. These measurements describe that dataset, not a production latency guarantee. See [SQL, migration semantics, measured plans, and reproduction](docs/reporting.md).
+
+## Tests and CI
+
+Install host-side development tools:
+
+```bash
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+```
+
+Fast SQLite run; PostgreSQL-only SQL and locking cases are explicitly skipped:
+
+```bash
+DB_ENGINE=sqlite DJANGO_DEBUG=1 .venv/bin/python -m pytest -q -ra --strict-markers
+```
+
+Full local PostgreSQL run, using an isolated disposable database on port 25432:
+
+```bash
+docker compose -p hookcourier-tests -f compose.test.yaml up -d --wait
+DB_ENGINE=postgresql DJANGO_DEBUG=1 DB_HOST=127.0.0.1 DB_PORT=25432 \
+  POSTGRES_DB=hookcourier_test POSTGRES_USER=hookcourier_test \
+  POSTGRES_PASSWORD=disposable-test-password \
+  .venv/bin/python -m pytest -q -ra --strict-markers
+docker compose -p hookcourier-tests -f compose.test.yaml down --volumes
+```
+
+The suite covers acceptance, replay/conflict, simultaneous idempotency requests, real PostgreSQL worker locking, retries, final errors, queue outages, owner access, escaped payloads, reporting boundaries/backfill, health, and production settings. Unit tests mock the broker and HTTP receiver. The separate Compose demo verifies real Redis and Celery.
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes and pull requests with PostgreSQL 17 and Python 3.13. Actions are pinned to release commit SHAs and receive read-only repository permissions. A workflow run becomes available after the branch is pushed; local tests alone do not establish GitHub CI status.
+
+## Deployment preparation
+
+See [production rehearsal, HTTPS, backups, and updates](docs/deployment.md). Production uses Gunicorn, WhiteNoise, an unprivileged user, a separate migration job, and an isolated database/Redis network. The default web binding is loopback. Public hosting, a domain, and TLS setup remain to be selected; this repository does not claim a live public demo.
+
+## Configuration and operational limits
+
+`.env.example` lists development settings; `.env.production.example` lists production settings. Delivery defaults are `WEBHOOK_MAX_ATTEMPTS=5`, `WEBHOOK_TIMEOUT_SECONDS=5`, `WEBHOOK_MAX_BYTES=65536`, `WEBHOOK_RETRY_BASE_SECONDS=2`, and `WEBHOOK_RETRY_MAX_SECONDS=60`. Recreate web and worker containers after changing environment values.
+
+Destination configuration is restricted to the trusted owner. Accepting URLs from untrusted users requires separate SSRF protection. Dashboard pages require an active superuser, escape untrusted text, and are private/non-cacheable. API keys, payloads, response bodies, and receiver credentials are excluded from delivery logs.
+
+A forced worker interruption can leave an event `delivering`. The recovery command does not automatically reset it: inspect receiver behavior and attempt history before any manual retry. Lost broker messages also require the recovery command; no outbox dispatcher or recovery scheduler is included. See the deployment guide for the operational procedure.
+
+## Repository and milestones
+
+```text
+src/config/                 Django, Celery, health, production/static settings
+src/deliveries/             API, models, delivery rules, reporting, owner dashboard
+src/deliveries/management/  Recovery and report commands
+src/deliveries/migrations/  Schema, historical backfill, indexes
+demo/receiver.py            Receiver that fails twice, then succeeds
+tests/                      API, delivery, owner, concurrency, report, runtime tests
+.github/workflows/ci.yml    PostgreSQL CI checks
+docs/                       Plans, SQL evidence, deployment and Git instructions
+```
+
+[Week one](docs/week-1.md) · [Week two](docs/week-2.md) · [Week three](docs/week-3.md) · [Git checkpoints](docs/version-control.md)

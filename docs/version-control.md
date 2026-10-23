@@ -14,6 +14,9 @@ Each implementation commit represents one logical step. Tests and usage document
 | `a24b459` | Weeks one and two merged into main | Original checkpoints retained by merge commit |
 | `7d8fa96` | Keep receiver URL secrets out of HTTP client logs | 46 test cases |
 | `223b5c2` | Recover due pending events after a broker outage | 55 test cases; real Redis outage and repeated recovery |
+| `73b7535` | Recovery and owner dashboard merged into main | Three implementation commits retained |
+| `b2244d4` | GitHub Actions and real PostgreSQL concurrency checks | 78 PostgreSQL test cases |
+| `29105b8` | Daily SQL report, completion times, and measured partial index | 96 PostgreSQL test cases; 100,000-event benchmark |
 
 At the delivery checkpoint, tasks can be queued manually. Automatic publication from the event API is introduced in the following commit. The demo receiver is introduced after that.
 
@@ -35,7 +38,7 @@ git switch --detach 469c185
 Return to the current implementation:
 
 ```bash
-git switch week-3-recovery-dashboard
+git switch week-3-release-preparation
 ```
 
 Detached HEAD is useful for inspection. If you want to make changes from that checkpoint, create a branch before committing:
@@ -65,7 +68,7 @@ Before running an earlier checkpoint, install its dependencies and rebuild its D
 Push the branch when you are ready:
 
 ```bash
-git push -u origin week-3-recovery-dashboard
+git push -u origin week-3-release-preparation
 ```
 
-Weeks one and two were merged together through pull request #1. Open the current feature branch's pull request against `main`. Choose **Create a merge commit** to preserve the separate commits and their IDs in the main branch history.
+Weeks one and two were merged through pull request #1; recovery and the dashboard through pull request #2. Open the current feature branch's pull request against `main`, inspect its CI run, and choose **Create a merge commit** to preserve the separate commits and their IDs in the main branch history.

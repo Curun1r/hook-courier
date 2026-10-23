@@ -95,7 +95,15 @@ def perform_delivery(event_id: str) -> DeliveryOutcome:
         if previous_number >= settings.WEBHOOK_MAX_ATTEMPTS:
             event.status = Event.Status.FAILED
             event.next_attempt_at = None
-            event.save(update_fields=["status", "next_attempt_at", "updated_at"])
+            event.completed_at = timezone.now()
+            event.save(
+                update_fields=[
+                    "status",
+                    "next_attempt_at",
+                    "completed_at",
+                    "updated_at",
+                ]
+            )
             return DeliveryOutcome()
 
         event.status = Event.Status.DELIVERING
@@ -121,12 +129,16 @@ def perform_delivery(event_id: str) -> DeliveryOutcome:
         )
         if result.status_code is not None and 200 <= result.status_code < 300:
             event.status = Event.Status.DELIVERED
+            event.completed_at = timezone.now()
         elif result.retryable and number < settings.WEBHOOK_MAX_ATTEMPTS:
             retry_after = retry_delay(number)
             event.status = Event.Status.PENDING
             event.next_attempt_at = timezone.now() + timedelta(seconds=retry_after)
         else:
             event.status = Event.Status.FAILED
-        event.save(update_fields=["status", "next_attempt_at", "updated_at"])
+            event.completed_at = timezone.now()
+        event.save(
+            update_fields=["status", "next_attempt_at", "completed_at", "updated_at"]
+        )
 
     return DeliveryOutcome(retry_after)

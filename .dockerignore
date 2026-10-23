@@ -1,4 +1,5 @@
 .env
+.env.*
 .venv/
 .git/
 .idea/
@@ -10,3 +11,6 @@ tests/
 docs/
 *.sqlite3
 *.egg-info/
+staticfiles/
+compose.verify.yaml
+compose.smoke.yaml

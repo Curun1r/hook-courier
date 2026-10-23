@@ -3,6 +3,7 @@ x-app: &app
   image: hookcourier:local
   env_file: .env
   environment:
+    DJANGO_SETTINGS_MODULE: config.settings
     DB_HOST: db
     CELERY_BROKER_URL: redis://redis:6379/0
 

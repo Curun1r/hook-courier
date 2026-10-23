@@ -32,6 +32,9 @@ deliveries = ["templates/deliveries/*.html", "static/deliveries/*.css"]
 DJANGO_SETTINGS_MODULE = "config.settings"
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+  "postgresql: requires PostgreSQL for database behavior and concurrency checks",
+]
 
 [tool.ruff]
 line-length = 88

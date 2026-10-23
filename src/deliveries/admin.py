@@ -35,6 +35,7 @@ class EventAdmin(admin.ModelAdmin):
         "request_hash",
         "status",
         "next_attempt_at",
+        "completed_at",
         "created_at",
         "updated_at",
     )

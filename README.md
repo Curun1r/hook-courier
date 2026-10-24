@@ -181,3 +181,8 @@ docs/                       Plans, SQL evidence, deployment and Git instructions
 ```
 
 [Week one](docs/week-1.md) · [Week two](docs/week-2.md) · [Week three](docs/week-3.md) · [Git checkpoints](docs/version-control.md)
+
+## License
+
+HookCourier is licensed under the [MIT License](LICENSE).
+Third-party dependencies retain their own licenses.

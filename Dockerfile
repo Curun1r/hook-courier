@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_SETTINGS_MODULE=config.settings_production
 
 WORKDIR /app
-COPY pyproject.toml /app/
+COPY pyproject.toml LICENSE /app/
 COPY src /app/src
 COPY demo /app/demo
 COPY gunicorn.conf.py /app/gunicorn.conf.py

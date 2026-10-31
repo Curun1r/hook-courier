@@ -17,6 +17,7 @@
         <div><dt>Destination</dt><dd><a href="{% url 'admin:deliveries_destination_change' event.destination_id %}">{{ event.destination.name }}</a></dd></div>
         <div><dt>Created (UTC)</dt><dd>{{ event.created_at|date:"Y-m-d H:i:s" }}</dd></div>
         <div><dt>Updated (UTC)</dt><dd>{{ event.updated_at|date:"Y-m-d H:i:s" }}</dd></div>
+        {% if event.delivery_expires_at %}<div><dt>Delivery lease expires (UTC)</dt><dd>{{ event.delivery_expires_at|date:"Y-m-d H:i:s" }}</dd></div>{% endif %}
         {% if event.next_attempt_at %}<div><dt>Next attempt (UTC)</dt><dd>{{ event.next_attempt_at|date:"Y-m-d H:i:s" }}</dd></div>{% endif %}
     </dl>
 </section>
@@ -32,7 +33,7 @@
                 <tr>
                     <td class="mono">#{{ attempt.number }}</td>
                     <td class="nowrap">{{ attempt.attempted_at|date:"Y-m-d H:i:s" }}</td>
-                    <td class="mono">{{ attempt.status_code|default_if_none:"—" }}</td>
+                    <td class="mono">{% if attempt.finished_at %}{{ attempt.status_code|default_if_none:"—" }}{% else %}In progress{% endif %}</td>
                     <td class="nowrap">{{ attempt.duration_ms }} ms</td>
                     <td class="wrap">{{ attempt.error|default:"—" }}</td>
                 </tr>

@@ -37,6 +37,9 @@ class Event(models.Model):
     )
     next_attempt_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    delivery_token = models.UUIDField(null=True, blank=True, editable=False)
+    delivery_started_at = models.DateTimeField(null=True, blank=True)
+    delivery_expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -64,6 +67,7 @@ class DeliveryAttempt(models.Model):
     status_code = models.PositiveSmallIntegerField(null=True, blank=True)
     duration_ms = models.PositiveIntegerField()
     error = models.TextField(blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["number"]

@@ -24,7 +24,7 @@ def test_delivery_does_not_log_destination_secrets_at_info(
         event_type="appointment.created",
         payload={"appointment_id": 123},
     )
-    original_client = httpx.Client
+    original_client = httpx.AsyncClient
     requests = []
 
     def receive(request):
@@ -34,7 +34,7 @@ def test_delivery_does_not_log_destination_secrets_at_info(
     def client(**kwargs):
         return original_client(transport=httpx.MockTransport(receive), **kwargs)
 
-    monkeypatch.setattr(delivery.httpx, "Client", client)
+    monkeypatch.setattr(delivery.httpx, "AsyncClient", client)
     with caplog.at_level(logging.INFO):
         result = delivery.send_webhook(event)
 

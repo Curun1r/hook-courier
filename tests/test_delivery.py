@@ -28,7 +28,7 @@ def event():
 
 @pytest.fixture
 def http_receiver(monkeypatch):
-    original_client = httpx.Client
+    original_client = httpx.AsyncClient
     requests = []
     options = []
 
@@ -41,7 +41,7 @@ def http_receiver(monkeypatch):
             options.append(kwargs)
             return original_client(transport=httpx.MockTransport(receive), **kwargs)
 
-        monkeypatch.setattr(delivery.httpx, "Client", client)
+        monkeypatch.setattr(delivery.httpx, "AsyncClient", client)
         return requests, options
 
     return install

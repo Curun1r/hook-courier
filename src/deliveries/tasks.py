@@ -2,6 +2,7 @@ import logging
 
 from celery import shared_task
 from celery.exceptions import Reject
+from django.conf import settings
 from kombu.exceptions import OperationalError
 
 from .delivery import perform_delivery
@@ -9,7 +10,13 @@ from .delivery import perform_delivery
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, ignore_result=True, max_retries=None)
+@shared_task(
+    bind=True,
+    ignore_result=True,
+    max_retries=None,
+    soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT,
+    time_limit=settings.CELERY_TASK_TIME_LIMIT,
+)
 def deliver_event(self, event_id: str) -> None:
     outcome = perform_delivery(event_id)
     if outcome.retry_after is not None:

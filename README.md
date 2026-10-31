@@ -77,7 +77,7 @@ Send the identical POST again: it returns the same UUID with `Idempotency-Replay
 
 `Destination` stores the endpoint name, URL, and active flag. `Event` stores the destination, type, JSON payload, idempotency fingerprint, state, next retry, and completion time. `DeliveryAttempt` stores its number, start time, HTTP code, duration, and safe error.
 
-A destination ID is an integer. An event ID is a UUID and stays unchanged across retries. The receiver gets `id`, `event_type`, and `payload`, plus an `X-HookCourier-Event-ID` header. The sender's API key is never forwarded.
+A destination ID is an integer. An event ID is a UUID and stays unchanged across retries. The receiver gets `id`, `event_type`, and `payload`, plus an `X-HookCourier-Event-ID` header. The sender's API key is never forwarded. Attempts include `finished_at`; it is null while a request is in progress. Invalid UTF-8 strings and null characters in payload values or object keys return HTTP 400.
 
 ## Delivery rules
 
@@ -92,7 +92,8 @@ A destination ID is an integer. An event ID is a UUID and stays unchanged across
 - Other HTTP 4xx and redirects fail immediately; redirects are not followed.
 - Five attempts maximum by default, including the first. Retry delays: 2, 4, 8, 16 seconds.
 - Limit the outgoing JSON envelope to 65,536 bytes. API and worker both check it.
-- Use a five-second timeout for each HTTP I/O phase; response bodies are not stored.
+- Use a five-second timeout for each HTTP I/O phase and a 15-second total HTTP deadline; response bodies are not stored.
+- Reserve an attempt before HTTP and retain interrupted attempts in history. Expired delivery leases can be recovered explicitly; late worker results cannot overwrite a newer attempt.
 - A disabled destination produces a failed attempt without an HTTP request.
 - Publish the task with `transaction.on_commit()` after PostgreSQL saves the event.
 - Database uniqueness and row locks protect idempotency and concurrent worker claims.
@@ -108,7 +109,22 @@ docker compose exec web python src/manage.py requeue_pending --dry-run
 docker compose exec web python src/manage.py requeue_pending --limit 100
 ```
 
-The default batch is 100, oldest first. Future retries and delivering/terminal states are skipped. Dry-run publishes nothing. A publish failure stops with a nonzero exit status and retains saved data. Repeated recovery can enqueue duplicate jobs; the worker checks the saved state before delivery.
+The default batch is 100, oldest first. Future retries and delivering/terminal states are skipped by default. Dry-run publishes nothing. A publish failure stops with a nonzero exit status and retains saved data. Repeated recovery can enqueue duplicate jobs; the worker checks the saved state before delivery.
+
+After a worker crash, inspect the receiver and preview expired delivery leases:
+
+```bash
+docker compose exec web python src/manage.py requeue_pending --recover-expired --dry-run
+docker compose exec web python src/manage.py requeue_pending --recover-expired --limit 100
+```
+
+This is an explicit opt-in to retry deliveries whose receiver outcome may be unknown.
+Receivers must deduplicate by the immutable event ID. Fresh leases and terminal events
+are left alone. Interrupted attempts consume the same five-attempt budget as HTTP
+failures. At the limit the event becomes failed rather than starting another request.
+A token check prevents an older worker's late response from replacing a newer result.
+This command should be scheduled by the deployment operator; no scheduler is started
+automatically.
 
 ## Daily report
 
@@ -161,13 +177,13 @@ See [production rehearsal, HTTPS, backups, and updates](docs/deployment.md). Pro
 
 ## Configuration and operational limits
 
-`.env.example` lists development settings; `.env.production.example` lists production settings. Delivery defaults are `WEBHOOK_MAX_ATTEMPTS=5`, `WEBHOOK_TIMEOUT_SECONDS=5`, `WEBHOOK_MAX_BYTES=65536`, `WEBHOOK_RETRY_BASE_SECONDS=2`, and `WEBHOOK_RETRY_MAX_SECONDS=60`. Recreate web and worker containers after changing environment values.
+`.env.example` lists development settings; `.env.production.example` lists production settings. Delivery defaults are `WEBHOOK_MAX_ATTEMPTS=5`, `WEBHOOK_TIMEOUT_SECONDS=5`, `WEBHOOK_MAX_BYTES=65536`, `WEBHOOK_RETRY_BASE_SECONDS=2`, and `WEBHOOK_RETRY_MAX_SECONDS=60`. `WEBHOOK_DEADLINE_SECONDS=15` bounds the HTTP operation. Celery soft/hard limits are the deadline plus 5/10 seconds; delivery leases last the deadline plus 60 seconds. Recreate web and worker containers after changing environment values.
 
 Destination configuration is restricted to the trusted owner. Accepting URLs from untrusted users requires separate SSRF protection. Dashboard pages require an active superuser, escape untrusted text, and are private/non-cacheable. API keys, payloads, response bodies, and receiver credentials are excluded from delivery logs.
 
-A forced worker interruption can leave an event `delivering`. The recovery command does not automatically reset it: inspect receiver behavior and attempt history before any manual retry. Lost broker messages also require the recovery command; no outbox dispatcher or recovery scheduler is included. See the deployment guide for the operational procedure.
+A forced worker interruption can leave an event `delivering` until its lease expires. Inspect receiver behavior and use `requeue_pending --recover-expired` for controlled recovery. Lost broker messages also require the recovery command; no outbox dispatcher or recovery scheduler is included. See the deployment guide for the operational procedure.
 
-## Repository and milestones
+## Repository structure
 
 ```text
 src/config/                 Django, Celery, health, production/static settings
@@ -177,10 +193,8 @@ src/deliveries/migrations/  Schema, historical backfill, indexes
 demo/receiver.py            Receiver that fails twice, then succeeds
 tests/                      API, delivery, owner, concurrency, report, runtime tests
 .github/workflows/ci.yml    PostgreSQL CI checks
-docs/                       Plans, SQL evidence, deployment and Git instructions
+docs/                       Deployment guide and SQL report evidence
 ```
-
-[Week one](docs/week-1.md) · [Week two](docs/week-2.md) · [Week three](docs/week-3.md) · [Git checkpoints](docs/version-control.md)
 
 ## License
 

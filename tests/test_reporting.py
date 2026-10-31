@@ -134,12 +134,15 @@ def test_migration_backfills_only_historical_terminal_events():
             event_ids[status] = saved.pk
         executor = MigrationExecutor(connection)
         executor.migrate([latest])
+        historical_event = executor.loader.project_state([latest]).apps.get_model(
+            "deliveries", "Event"
+        )
         for status, event_id in event_ids.items():
-            saved = Event.objects.get(pk=event_id)
+            saved = historical_event.objects.get(pk=event_id)
             expected = modified_at if status in ["delivered", "failed"] else None
             assert saved.completed_at == expected
     finally:
-        MigrationExecutor(connection).migrate([latest])
+        MigrationExecutor(connection).migrate([("deliveries", "0004_delivery_leases")])
 
 
 @pytest.mark.parametrize(

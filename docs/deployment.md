@@ -132,11 +132,23 @@ migration. Rebuild the selected release, run its migrations once, and start the 
 Reverting Git commits does not restore the database or persistent volumes. Migration
 0003 backfills completion times and adds a report index; reversing it removes those data.
 
-Worker shutdown has a 45-second grace period. A forced interruption after a worker claims
-an event may still leave it delivering. Inspect the receiver and attempt history first:
-the receiver may already have processed it. The pending recovery command deliberately
-does not reset delivering or terminal events. Any manual retry decision must account for
-possible duplicate delivery; automatic recovery of that state is outside this version.
+Worker shutdown has a 45-second grace period. A 15-second HTTP deadline is backed by
+Celery soft/hard limits at 20/25 seconds by default (the hard limit requires a pool
+with time-limit support, such as production's prefork pool). Delivery claims expire
+after 75 seconds; each claim has its own token and durable attempt record.
+
+Before applying migration 0004, drain/stop old workers, run migrations once, then
+restart web and workers together. Historical completed attempts receive a completion
+time, and legacy delivering events receive a 120-second recovery grace period.
+Do not roll back the lease schema while these workers are running.
+
+After a forced interruption, inspect the receiver and preview recovery with
+`requeue_pending --recover-expired --dry-run`. Use `--recover-expired --limit 100`
+to retire expired claims, retain their unknown-outcome history and queue another
+attempt within the existing budget. Late worker results are ignored after recovery.
+Receivers still need event-ID deduplication: a timeout or missing result does not prove
+that no side effect occurred. Schedule this command externally if automatic periodic
+recovery is required; the application does not start a scheduler.
 
 ## References
 

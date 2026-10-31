@@ -16,11 +16,16 @@ class EventInputSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        body = encode_webhook_body(
-            event_id="00000000-0000-0000-0000-000000000000",
-            event_type=attrs["event_type"],
-            payload=attrs["payload"],
-        )
+        try:
+            body = encode_webhook_body(
+                event_id="00000000-0000-0000-0000-000000000000",
+                event_type=attrs["event_type"],
+                payload=attrs["payload"],
+            )
+        except (TypeError, ValueError, RecursionError):
+            raise serializers.ValidationError(
+                {"payload": "Expected valid UTF-8 JSON without null characters."}
+            ) from None
         if len(body) > settings.WEBHOOK_MAX_BYTES:
             raise serializers.ValidationError(
                 {
@@ -33,7 +38,14 @@ class EventInputSerializer(serializers.Serializer):
 class DeliveryAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryAttempt
-        fields = ("number", "attempted_at", "status_code", "duration_ms", "error")
+        fields = (
+            "number",
+            "attempted_at",
+            "status_code",
+            "duration_ms",
+            "error",
+            "finished_at",
+        )
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -49,6 +61,7 @@ class EventSerializer(serializers.ModelSerializer):
             "payload",
             "status",
             "next_attempt_at",
+            "delivery_expires_at",
             "created_at",
             "updated_at",
             "attempts",

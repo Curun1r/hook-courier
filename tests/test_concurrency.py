@@ -120,7 +120,7 @@ def test_concurrent_worker_claims_make_one_http_request(monkeypatch):
     http_started = ThreadEvent()
     finish_http = ThreadEvent()
     requests = []
-    original_client = httpx.Client
+    original_client = httpx.AsyncClient
 
     def receive(request):
         requests.append(request)
@@ -131,7 +131,7 @@ def test_concurrent_worker_claims_make_one_http_request(monkeypatch):
     def mock_client(**kwargs):
         return original_client(transport=httpx.MockTransport(receive), **kwargs)
 
-    monkeypatch.setattr(delivery.httpx, "Client", mock_client)
+    monkeypatch.setattr(delivery.httpx, "AsyncClient", mock_client)
 
     def deliver(first):
         first_claim_seen = False
@@ -177,3 +177,37 @@ def test_concurrent_worker_claims_make_one_http_request(monkeypatch):
     attempt = event.attempts.get()
     assert (attempt.number, attempt.status_code) == (1, 200)
     assert len(requests) == 1
+
+
+def test_concurrent_expired_lease_recovery_records_one_interruption():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from deliveries.delivery import recover_expired_delivery
+
+    destination = Destination.objects.create(name="Receiver", url="https://example.com")
+    event = Event.objects.create(
+        destination=destination,
+        event_type="review.event",
+        payload={},
+        request_hash="0" * 64,
+        status=Event.Status.DELIVERING,
+        delivery_expires_at=timezone.now() - timedelta(seconds=1),
+        delivery_started_at=timezone.now() - timedelta(minutes=2),
+    )
+    DeliveryAttempt.objects.create(event=event, number=1, duration_ms=0)
+    barrier = Barrier(2, timeout=WAIT_SECONDS)
+
+    def recover():
+        with thread_connection():
+            barrier.wait()
+            return recover_expired_delivery(str(event.pk))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: recover(), range(2)))
+    assert results == [True, True]
+    event.refresh_from_db()
+    assert event.status == Event.Status.PENDING and event.delivery_token is None
+    assert event.attempts.count() == 1
+    assert event.attempts.get().finished_at is not None

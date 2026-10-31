@@ -15,7 +15,14 @@ class DeliveryAttemptInline(admin.TabularInline):
     model = DeliveryAttempt
     extra = 0
     can_delete = False
-    readonly_fields = ("number", "attempted_at", "status_code", "duration_ms", "error")
+    readonly_fields = (
+        "number",
+        "attempted_at",
+        "status_code",
+        "duration_ms",
+        "error",
+        "finished_at",
+    )
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -36,6 +43,9 @@ class EventAdmin(admin.ModelAdmin):
         "status",
         "next_attempt_at",
         "completed_at",
+        "delivery_token",
+        "delivery_started_at",
+        "delivery_expires_at",
         "created_at",
         "updated_at",
     )
